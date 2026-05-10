@@ -5,12 +5,19 @@ import importlib
 import streamlit as st
 from streamlit_option_menu import option_menu
 
-# Add project root to path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT_DIR))
 
 from utils.ui import load_css, show_disclaimer
 from utils.config import APP_NAME, APP_TAGLINE
+from services.auth_service import (
+    sign_up,
+    sign_in,
+    sign_out,
+    restore_user_from_session,
+    response_to_user_dict,
+)
+from services.user_context import set_auth_user, clear_auth_user, get_auth_user
 
 st.set_page_config(
     page_title=APP_NAME,
@@ -21,44 +28,70 @@ st.set_page_config(
 
 load_css()
 
-# Optional: force dashboard on first load
-if "main_nav_v2" not in st.session_state:
-    st.session_state["main_nav_v2"] = "Dashboard"
+if "auth_user" not in st.session_state:
+    restored = restore_user_from_session()
+    if restored:
+        set_auth_user(restored)
 
-with st.sidebar:
-    st.markdown("## 🩺 NeuralMed AI")
-    st.caption("Medical decision support dashboard")
-
-    selected = option_menu(
-        menu_title="Navigation",
-        options=[
-            "Dashboard",
-            "Symptom Analysis",
-            "Medical Imaging",
-            "Report Summarizer",
-            "Prescription OCR",
-            "Risk Prediction",
-            "Voice Assistant",
-            "AI Chatbot",
-        ],
-        icons=[
-            "house",
-            "activity",
-            "image",
-            "file-earmark-text",
-            "camera",
-            "heart-pulse",
-            "mic",
-            "chat-dots",
-        ],
-        default_index=0,
-        key="main_nav_v2",
+def render_auth_gate():
+    st.markdown(
+        """
+        <div class="hero-card">
+            <h1 style="margin:0; font-size:2.4rem;">NeuralMed AI</h1>
+            <p style="margin-top:10px; font-size:1.05rem;">
+                Sign in to view your personal medical AI dashboard and history.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-st.title(APP_TAGLINE)
-st.write("")
+    st.write("")
+    tab_login, tab_signup = st.tabs(["Login", "Sign Up"])
 
-if selected == "Dashboard":
+    with tab_login:
+        email = st.text_input("Email", key="login_email")
+        password = st.text_input("Password", type="password", key="login_password")
+
+        if st.button("Login", key="login_btn"):
+            try:
+                resp = sign_in(email, password)
+                user_dict = response_to_user_dict(resp)
+                if user_dict:
+                    set_auth_user(user_dict)
+                    st.success("Logged in successfully.")
+                    st.rerun()
+                else:
+                    st.error("Login worked, but no user data was returned.")
+            except Exception as e:
+                st.error(f"Login failed: {e}")
+
+    with tab_signup:
+        full_name = st.text_input("Full Name", key="signup_name")
+        email = st.text_input("Email", key="signup_email")
+        password = st.text_input("Password", type="password", key="signup_password")
+
+        if st.button("Create Account", key="signup_btn"):
+            try:
+                resp = sign_up(email, password, full_name)
+                user_dict = response_to_user_dict(resp)
+
+                if user_dict and getattr(resp, "session", None):
+                    set_auth_user(user_dict)
+                    st.success("Account created and signed in.")
+                    st.rerun()
+                else:
+                    st.success(
+                        "Account created. Please check your email and confirm your account before logging in."
+                    )
+            except Exception as e:
+                st.error(f"Sign up failed: {e}")
+
+    st.caption(
+        "Supabase password auth is enabled by default on hosted projects, and sign-up may require email confirmation first."
+    )
+
+def render_dashboard():
     st.markdown(
         """
         <div class="hero-card">
@@ -125,16 +158,81 @@ if selected == "Dashboard":
 
     show_disclaimer()
 
+def render_placeholder(title: str, subtitle: str):
+    st.markdown(
+        f"""
+        <div class="hero-card">
+            <h1 style="margin:0; font-size:2.1rem;">{title}</h1>
+            <p style="margin-top:10px; font-size:1.02rem; opacity:0.95;">
+                {subtitle}
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.write("")
+    st.info("This module is connected in the app shell and will be built in the next step.")
+
+if not get_auth_user():
+    render_auth_gate()
+    st.stop()
+
+with st.sidebar:
+    user = get_auth_user()
+    st.markdown("## 🩺 NeuralMed AI")
+    st.caption(f"Logged in as: {user.get('email', 'User')}")
+    if st.button("Logout", key="logout_btn"):
+        try:
+            sign_out()
+        except Exception:
+            pass
+        clear_auth_user()
+        st.rerun()
+
+    selected = option_menu(
+        menu_title="Navigation",
+        options=[
+            "Dashboard",
+            "My History",
+            "Symptom Analysis",
+            "Medical Imaging",
+            "Report Summarizer",
+            "Prescription OCR",
+            "Risk Prediction",
+            "Voice Assistant",
+            "AI Chatbot",
+        ],
+        icons=[
+            "house",
+            "clock-history",
+            "activity",
+            "image",
+            "file-earmark-text",
+            "camera",
+            "heart-pulse",
+            "mic",
+            "chat-dots",
+        ],
+        default_index=0,
+        key="main_nav_v3",
+    )
+
+st.title(APP_TAGLINE)
+st.write("")
+
+if selected == "Dashboard":
+    render_dashboard()
+
+elif selected == "My History":
+    history_page = importlib.import_module("features.history_dashboard")
+    history_page.render()
+
 elif selected == "Symptom Analysis":
     symptom_page = importlib.import_module("features.symptom_analysis")
     symptom_page.render()
 
 elif selected == "Medical Imaging":
-
-    imaging_page = importlib.import_module(
-        "features.medical_imaging"
-    )
-
+    imaging_page = importlib.import_module("features.medical_imaging")
     imaging_page.render()
 
 elif selected == "Report Summarizer":
@@ -153,9 +251,5 @@ elif selected == "Voice Assistant":
     voice_page.render()
 
 elif selected == "AI Chatbot":
-
-    chatbot_page = importlib.import_module(
-        "features.ai_chatbot"
-    )
-
+    chatbot_page = importlib.import_module("features.ai_chatbot")
     chatbot_page.render()

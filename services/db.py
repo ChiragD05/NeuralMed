@@ -1,19 +1,24 @@
-from services.supabase_client import supabase
+from services.supabase_client import admin_supabase
+from services.user_context import get_auth_user
+
+def _attach_user_metadata(payload: dict):
+    data = dict(payload)
+    user = get_auth_user()
+
+    if user:
+        data.setdefault("app_user_id", user.get("id"))
+        data.setdefault("app_user_email", user.get("email"))
+
+    return data
 
 def insert_data(table, data):
+    return admin_supabase.table(table).insert(_attach_user_metadata(data)).execute()
 
-    return (
-        supabase
-        .table(table)
-        .insert(data)
-        .execute()
-    )
+def fetch_my_rows(table, limit=10):
+    query = admin_supabase.table(table).select("*")
+    user = get_auth_user()
 
-def fetch_data(table):
+    if user and user.get("email"):
+        query = query.eq("app_user_email", user["email"])
 
-    return (
-        supabase
-        .table(table)
-        .select("*")
-        .execute()
-    )
+    return query.order("created_at", desc=True).limit(limit).execute()
