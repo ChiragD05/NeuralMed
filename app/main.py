@@ -136,7 +136,8 @@ elif selected == "Report Summarizer":
     st.info("Module under development")
 
 elif selected == "Prescription OCR":
-    st.info("Module under development")
+    prescription_page = importlib.import_module("features.prescription_ocr")
+    prescription_page.render()
 
 elif selected == "Risk Prediction":
     st.info("Module under development")
