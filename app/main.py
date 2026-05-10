@@ -138,7 +138,8 @@ elif selected == "Medical Imaging":
     imaging_page.render()
 
 elif selected == "Report Summarizer":
-    st.info("Module under development")
+    report_page = importlib.import_module("features.report_summarizer")
+    report_page.render()
 
 elif selected == "Prescription OCR":
     prescription_page = importlib.import_module("features.prescription_ocr")
