@@ -130,7 +130,12 @@ elif selected == "Symptom Analysis":
     symptom_page.render()
 
 elif selected == "Medical Imaging":
-    st.info("Module under development")
+
+    imaging_page = importlib.import_module(
+        "features.medical_imaging"
+    )
+
+    imaging_page.render()
 
 elif selected == "Report Summarizer":
     st.info("Module under development")
