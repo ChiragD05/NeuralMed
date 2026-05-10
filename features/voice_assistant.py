@@ -61,9 +61,9 @@ def render():
                 st.audio(audio_file.read(), format="audio/mp3")
 
             payload = {
-                "user_query": query,
-                "assistant_response": response,
-            }
+    "transcript": query,
+    "assistant_reply": response,
+}
 
             try:
                 insert_data("voice_sessions", payload)

@@ -22,3 +22,10 @@ def fetch_my_rows(table, limit=10):
         query = query.eq("app_user_email", user["email"])
 
     return query.order("created_at", desc=True).limit(limit).execute()
+
+def fetch_all_rows(table):
+    return admin_supabase.table(table).select("*").execute()
+
+def count_rows(table):
+    response = admin_supabase.table(table).select("*", count="exact").execute()
+    return response.count if hasattr(response, "count") else 0
