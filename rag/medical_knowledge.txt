@@ -1,0 +1,19 @@
+Fever is a temporary increase in body temperature, often due to infection.
+
+Common cold symptoms include sneezing, cough, mild fever, and congestion.
+
+Pneumonia is a lung infection that may cause fever, cough, chest pain, and difficulty breathing.
+
+COVID-19 symptoms may include fever, cough, fatigue, and loss of smell.
+
+Diabetes is a chronic condition affecting blood sugar regulation.
+
+High blood pressure may increase risk of heart disease and stroke.
+
+Chest pain with shortness of breath may require urgent medical evaluation.
+
+Persistent severe headache with vomiting should be medically evaluated.
+
+Tuberculosis is a bacterial lung infection that may cause cough, fever, and weight loss.
+
+Medical AI systems should not replace licensed healthcare professionals.
