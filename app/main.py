@@ -149,7 +149,8 @@ elif selected == "Risk Prediction":
     st.info("Module under development")
 
 elif selected == "Voice Assistant":
-    st.info("Module under development")
+    voice_page = importlib.import_module("features.voice_assistant")
+    voice_page.render()
 
 elif selected == "AI Chatbot":
 
