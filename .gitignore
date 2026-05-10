@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+env/
+
+# Environment files
+.env
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
+
+# Uploads and temp files
+uploads/*
+!uploads/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model files
+*.pt
+*.pth
+*.pkl
+*.joblib
+*.onnx
