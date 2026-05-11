@@ -1,9 +1,90 @@
+import uuid
+from datetime import datetime
+
 import streamlit as st
 
 from utils.ui import load_css, page_header
-from services.pdf_report_service import extract_text_from_pdf
 from services.rag_chatbot_service import ask_medical_chatbot
-from services.db import insert_data
+from services.db import insert_data, fetch_all_rows
+from services.user_context import get_auth_user
+
+
+def _parse_dt(value):
+    try:
+        if not value:
+            return datetime.min
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return datetime.min
+
+
+def _get_user_email():
+    user = get_auth_user()
+    return user.get("email") if user else None
+
+
+def _load_sessions():
+    try:
+        result = fetch_all_rows("chat_messages")
+        rows = result.data if hasattr(result, "data") else []
+    except Exception:
+        rows = []
+
+    user_email = _get_user_email()
+    if user_email:
+        user_rows = [r for r in rows if r.get("app_user_email") == user_email]
+        if user_rows:
+            rows = user_rows
+
+    sessions = {}
+
+    for row in rows:
+        sid = row.get("chat_session_id") or f"legacy-{row.get('id')}"
+        title = row.get("chat_session_title") or (row.get("query") or "Chat")[:50]
+        created_at = row.get("created_at")
+
+        if sid not in sessions:
+            sessions[sid] = {
+                "session_id": sid,
+                "title": title,
+                "created_at": created_at,
+                "rows": [],
+            }
+
+        sessions[sid]["rows"].append(row)
+
+        if _parse_dt(created_at) > _parse_dt(sessions[sid]["created_at"]):
+            sessions[sid]["created_at"] = created_at
+            sessions[sid]["title"] = title
+
+    session_list = list(sessions.values())
+    session_list.sort(key=lambda x: _parse_dt(x["created_at"]), reverse=True)
+    return session_list
+
+
+def _rows_to_messages(rows):
+    msgs = []
+    rows = sorted(rows, key=lambda r: _parse_dt(r.get("created_at")))
+    for row in rows:
+        q = (row.get("query") or "").strip()
+        a = (row.get("response") or "").strip()
+        if q:
+            msgs.append({"role": "user", "content": q})
+        if a:
+            msgs.append({"role": "assistant", "content": a})
+    return msgs
+
+
+def _reset_chat():
+    st.session_state.current_chat_session_id = None
+    st.session_state.current_chat_session_title = None
+    st.session_state.chat_history = []
+
+
+def _load_session(session):
+    st.session_state.current_chat_session_id = session["session_id"]
+    st.session_state.current_chat_session_title = session["title"]
+    st.session_state.chat_history = _rows_to_messages(session["rows"])
 
 
 def render():
@@ -11,63 +92,61 @@ def render():
 
     page_header(
         "🤖 AI Medical Chatbot",
-        "LangChain + OpenAI + FAISS + DuckDuckGo + PDF context"
+        "LangChain + OpenAI + FAISS + DuckDuckGo"
     )
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    if "chat_pdf_context" not in st.session_state:
-        st.session_state.chat_pdf_context = ""
+    if "current_chat_session_id" not in st.session_state:
+        st.session_state.current_chat_session_id = None
 
-    uploaded_pdf = st.file_uploader(
-        "Optional: upload a medical report PDF for context",
-        type=["pdf"],
-        key="chat_pdf_upload"
-    )
+    if "current_chat_session_title" not in st.session_state:
+        st.session_state.current_chat_session_title = None
 
-    if uploaded_pdf is not None:
-        with st.spinner("Extracting PDF text..."):
-            pdf_text = extract_text_from_pdf(uploaded_pdf)
+    sessions = _load_sessions()
 
-        st.session_state.chat_pdf_context = pdf_text
+    with st.sidebar:
+        st.markdown("### 🕘 Previous Chats")
 
-        st.success("PDF context loaded for this chat session.")
+        if st.button("➕ New Chat", key="new_chat_button"):
+            _reset_chat()
+            st.rerun()
 
-        with st.expander("Preview extracted PDF text"):
-            st.text_area(
-                "Extracted text",
-                value=pdf_text,
-                height=220,
-                key="chat_pdf_preview"
-            )
+        if sessions:
+            for session in sessions[:15]:
+                label = session["title"] or "Chat"
+                if st.button(label[:45], key=f"load_{session['session_id']}"):
+                    _load_session(session)
+                    st.rerun()
+        else:
+            st.caption("No saved chats yet.")
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if st.button("Clear PDF context", key="clear_pdf_context_button"):
-            st.session_state.chat_pdf_context = ""
-            st.success("PDF context cleared.")
-    with col2:
-        st.caption("Chat memory is kept in this session.")
+    # Show current chat only
+    if st.session_state.chat_history:
+        st.markdown(f"**Current chat:** {st.session_state.current_chat_session_title or 'Conversation'}")
+        st.write("")
 
-    for message in st.session_state.chat_history:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+    else:
+        st.info("Start a new chat or click a previous chat from the sidebar.")
 
     query = st.chat_input("Ask a medical question...")
 
     if query:
+        if not st.session_state.current_chat_session_id:
+            st.session_state.current_chat_session_id = uuid.uuid4().hex
+            st.session_state.current_chat_session_title = query[:50]
+
         st.session_state.chat_history.append({"role": "user", "content": query})
 
         with st.chat_message("user"):
             st.markdown(query)
 
         with st.spinner("Thinking..."):
-            result = ask_medical_chatbot(
-                query,
-                st.session_state.chat_history,
-                pdf_context=st.session_state.chat_pdf_context,
-            )
+            result = ask_medical_chatbot(query, st.session_state.chat_history)
 
         answer = result["answer"]
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
@@ -84,6 +163,8 @@ def render():
             insert_data(
                 "chat_messages",
                 {
+                    "chat_session_id": st.session_state.current_chat_session_id,
+                    "chat_session_title": st.session_state.current_chat_session_title,
                     "query": query,
                     "response": answer,
                     "retrieved_context": result["sources"],
@@ -92,6 +173,4 @@ def render():
         except Exception as e:
             st.warning(f"Database save failed: {str(e)}")
 
-    st.caption(
-        "AI-generated medical responses for educational decision support only."
-    )
+    st.caption("AI-generated medical responses for educational decision support only.")
