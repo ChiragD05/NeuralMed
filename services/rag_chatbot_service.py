@@ -19,8 +19,7 @@ Style rules:
 - Use simple language a patient can understand.
 - Do not repeat retrieved text verbatim.
 - Do not dump bullet lists unless the user explicitly asks for them.
-- If the question is a greeting or casual message, reply naturally and briefly.
-- If context is weak, say so politely and suggest a licensed clinician or ask one short follow-up question.
+- If the context is weak, say so politely and suggest a licensed clinician or ask one short follow-up question.
 - Never claim to replace a doctor.
 """
 
@@ -60,12 +59,6 @@ def format_history(chat_history):
     return "\n".join(lines)
 
 
-def retrieve_local_context(query: str):
-    retriever, _ = load_components()
-    docs = retriever.invoke(query)
-    return docs
-
-
 def web_search_context(query: str):
     try:
         results = WEB_SEARCH.invoke(query)
@@ -89,15 +82,12 @@ def web_search_context(query: str):
                 "snippet": snippet,
                 "link": link,
             })
-
-            snippets.append(
-                f"Title: {title}\nSnippet: {snippet}\nLink: {link}"
-            )
+            snippets.append(f"Title: {title}\nSnippet: {snippet}\nLink: {link}")
 
     return sources, "\n\n".join(snippets)
 
 
-def needs_web_search(query: str, local_docs):
+def needs_web_search(query: str, local_docs, pdf_context: str):
     q = query.lower()
 
     fresh_terms = [
@@ -108,17 +98,17 @@ def needs_web_search(query: str, local_docs):
     if any(term in q for term in fresh_terms):
         return True
 
-    if len(local_docs) == 0:
+    if len(local_docs) == 0 and not pdf_context.strip():
         return True
 
     local_text = " ".join(doc.page_content for doc in local_docs).strip()
-    if len(local_text) < 200:
+    if len(local_text) < 200 and len(pdf_context.strip()) < 200:
         return True
 
     return False
 
 
-def ask_medical_chatbot(query: str, chat_history=None):
+def ask_medical_chatbot(query: str, chat_history=None, pdf_context: str = ""):
     query_clean = query.strip()
 
     if not query_clean:
@@ -131,8 +121,7 @@ def ask_medical_chatbot(query: str, chat_history=None):
     if query_clean.lower() in greetings:
         return {
             "answer": (
-                "Hello! I am NeuralMed AI. "
-                "Ask me about symptoms, reports, medicines, or general health guidance, "
+                "Hello! I am NeuralMed AI. Ask me about symptoms, reports, medicines, or general health guidance, "
                 "and I will help in simple language."
             ),
             "sources": [],
@@ -150,14 +139,18 @@ def ask_medical_chatbot(query: str, chat_history=None):
     web_sources = []
     web_context = ""
 
-    if needs_web_search(query_clean, local_docs):
+    if needs_web_search(query_clean, local_docs, pdf_context):
         web_sources, web_context = web_search_context(query_clean)
 
     history_text = format_history(chat_history)
+    pdf_context_text = (pdf_context or "").strip()[:6000]
 
     prompt = f"""
 User question:
 {query_clean}
+
+Uploaded PDF context:
+{pdf_context_text if pdf_context_text else "No uploaded PDF context."}
 
 Relevant local medical context:
 {local_context if local_context else "No strong local context retrieved."}
@@ -193,6 +186,9 @@ Do not sound rigid.
         source_text = f"{title} — {snippet} — {link}".strip(" —")
         if source_text and source_text not in sources:
             sources.append(source_text)
+
+    if pdf_context_text:
+        sources.insert(0, "Uploaded PDF report context used in this answer.")
 
     return {
         "answer": response,
