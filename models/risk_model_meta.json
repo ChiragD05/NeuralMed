@@ -1,0 +1,21 @@
+{
+  "target": "TenYearCHD",
+  "features": [
+    "male",
+    "age",
+    "currentSmoker",
+    "cigsPerDay",
+    "BPMeds",
+    "prevalentStroke",
+    "prevalentHyp",
+    "diabetes",
+    "totChol",
+    "sysBP",
+    "diaBP",
+    "BMI",
+    "heartRate",
+    "glucose"
+  ],
+  "accuracy": 0.6709905660377359,
+  "roc_auc": 0.6999277635820638
+}

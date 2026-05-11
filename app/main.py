@@ -244,7 +244,8 @@ elif selected == "Prescription OCR":
     prescription_page.render()
 
 elif selected == "Risk Prediction":
-    st.info("Module under development")
+    risk_page = importlib.import_module("features.risk_prediction")
+    risk_page.render()
 
 elif selected == "Voice Assistant":
     voice_page = importlib.import_module("features.voice_assistant")

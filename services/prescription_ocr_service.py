@@ -4,66 +4,57 @@ import numpy as np
 import pytesseract
 from PIL import Image
 
-HEADER_WORD = "Medicine"
-FOOTER_WORDS = ["Next", "Visit"]
-
 NOISE_KEYWORDS = [
     "clinic", "timing", "timings", "residence", "consultation", "mobile",
     "diagnosis", "complaints", "next visit", "prescription is valid",
     "not for medico-legal", "consultant", "physician", "doctor", "address",
-    "powered by", "identity is not verified"
+    "powered by", "identity is not verified", "mr.", "mrs.", "male", "female",
+    "date", "phone", "mobile no", "m.b.b.s", "mbbs", "md", "signature"
 ]
 
+ROW_RE = re.compile(r"^\s*(\d{1,2})\s*[\)\.\-]?\s*(.+)$")
+DOSAGE_RE = re.compile(r"\b(?:[01]\s*[-–—]\s*){2}[01]\b")
+DURATION_RE = re.compile(r"\b\d+\s?(day|days|week|weeks)\b", re.I)
+PHONE_RE = re.compile(r"\b\d{7,}\b")
+DATE_RE = re.compile(r"\b\d{1,2}-[A-Za-z]{3}-\d{4}\b", re.I)
+
 def _find_table_bounds(image):
-    """
-    Tries to find the medicine table area using OCR word positions.
-    Returns (x1, y1, x2, y2).
-    """
     h, w = image.shape[:2]
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Slightly sharpen text for better OCR detection
-    gray = cv2.resize(gray, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
-
     data = pytesseract.image_to_data(
         gray,
         output_type=pytesseract.Output.DATAFRAME,
         config="--oem 3 --psm 6"
     )
+
     data = data.dropna(subset=["text"])
     data["text_clean"] = data["text"].astype(str).str.strip()
 
-    # Find the table header
-    header_rows = data[data["text_clean"].str.contains(HEADER_WORD, case=False, na=False)]
-    if not header_rows.empty:
-        header_y = int(header_rows["top"].min())
-    else:
-        header_y = int(h * 0.42)
-
-    # Find the footer area
-    next_rows = data[
-        data["text_clean"].str.contains("Next", case=False, na=False)
-        | data["text_clean"].str.contains("Visit", case=False, na=False)
+    header_rows = data[data["text_clean"].str.contains("Medicine", case=False, na=False)]
+    footer_rows = data[
+        data["text_clean"].str.contains("Next Visit", case=False, na=False)
+        | data["text_clean"].str.contains("Prescription is valid", case=False, na=False)
     ]
-    if not next_rows.empty:
-        footer_y = int(next_rows["top"].min())
+
+    if not header_rows.empty:
+        y1 = int(header_rows["top"].min()) - 20
     else:
-        footer_y = int(h * 0.78)
+        y1 = int(h * 0.38)
 
-    # Crop width around the medicine table
-    x1 = int(w * 0.08)
-    x2 = int(w * 0.94)
-
-    # Slightly expand the vertical crop
-    y1 = max(0, header_y - 25)
-    y2 = min(h, footer_y - 10)
-
-    # Fallback if bounds look wrong
-    if y2 <= y1:
-        y1 = int(h * 0.40)
+    if not footer_rows.empty:
+        y2 = int(footer_rows["top"].min()) - 15
+    else:
         y2 = int(h * 0.78)
-        x1 = int(w * 0.06)
-        x2 = int(w * 0.96)
+
+    x1 = int(w * 0.06)
+    x2 = int(w * 0.96)
+
+    y1 = max(0, y1)
+    y2 = min(h, y2)
+
+    if y2 <= y1:
+        y1 = int(h * 0.38)
+        y2 = int(h * 0.78)
 
     return x1, y1, x2, y2
 
@@ -81,14 +72,8 @@ def preprocess_image(uploaded_file):
         crop = image
 
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-
-    # Upscale for better OCR
     gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-
-    # Noise reduction
     gray = cv2.bilateralFilter(gray, 9, 75, 75)
-
-    # Improve contrast / binarize
     gray = cv2.adaptiveThreshold(
         gray,
         255,
@@ -111,11 +96,6 @@ def extract_text_from_image(uploaded_file):
     return text.strip(), lines
 
 def parse_medicines(text: str):
-    """
-    Keep only numbered medicine rows like:
-    1) CEFYCLAV 1-0-1 After Food - Daily - 2 Days
-    2) ZERODOL P 1-0-1 After Food - Daily - 2 Days
-    """
     medicines = []
 
     if not text.strip():
@@ -123,59 +103,73 @@ def parse_medicines(text: str):
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
 
-    numbered_row = re.compile(r"^\s*(\d+)\s*[\)\.\-]?\s*(.+)$")
-
     for line in lines:
         lower = line.lower()
 
-        # Skip obvious non-medicine lines
+        # skip obvious noise
         if any(k in lower for k in NOISE_KEYWORDS):
             continue
+        if PHONE_RE.search(line) or DATE_RE.search(line):
+            continue
 
-        m = numbered_row.match(line)
+        # only numbered medicine rows
+        m = ROW_RE.match(line)
         if not m:
             continue
 
         content = m.group(2).strip()
 
-        # Skip composition lines
+        # skip non-medicine table/header lines
         if content.lower().startswith("composition"):
             continue
+        if len(content) < 3:
+            continue
 
-        # Extract dosage pattern like 1-0-1 / 0-0-1 / 1-1-1
-        dosage_match = re.search(r"\b\d[-–—]\d[-–—]\d\b", content)
+        has_dosage = bool(DOSAGE_RE.search(content))
+        has_duration = bool(DURATION_RE.search(content))
+        has_timing = any(
+            word in lower
+            for word in [
+                "after food", "before food", "daily",
+                "morning", "night", "twice daily", "thrice daily"
+            ]
+        )
+
+        # keep only rows that look like prescription entries
+        if not (has_dosage or has_timing or has_duration):
+            continue
+
+        dosage_match = DOSAGE_RE.search(content)
         dosage = dosage_match.group(0).replace("–", "-").replace("—", "-") if dosage_match else ""
 
-        # Frequency / timing
         frequency = ""
         for word in ["after food", "before food", "daily", "morning", "night", "twice daily", "thrice daily"]:
             if word in lower:
                 frequency = word
                 break
 
-        # Duration
-        duration_match = re.search(r"\b\d+\s?(day|days|week|weeks)\b", lower)
-        duration = duration_match.group(0) if duration_match else ""
+        duration_match = DURATION_RE.search(content)
+        duration = duration_match.group(0).lower() if duration_match else ""
 
-        # Medicine name = text before dosage/timing words
         medicine_name = re.split(
-            r"\b\d[-–—]\d[-–—]\d\b|after food|before food|daily|morning|night|twice daily|thrice daily",
+            r"\b(?:[01]\s*[-–—]\s*){2}[01]\b|after food|before food|daily|morning|night|twice daily|thrice daily",
             content,
             flags=re.IGNORECASE
         )[0].strip(" -,:;.")
 
-        # Reject junk names
-        if not medicine_name or len(medicine_name) < 2:
+        # final safety cleanup
+        medicine_name = re.sub(r"\s{2,}", " ", medicine_name)
+        medicine_name = re.sub(r"\s+[cC]\s*[-–—]+\s*[-–—]+\s*\d*$", "", medicine_name).strip()
+
+        if not medicine_name:
             continue
 
-        medicines.append(
-            {
-                "medicine_name": medicine_name,
-                "dosage": dosage,
-                "frequency": frequency,
-                "duration": duration,
-                "raw_line": line,
-            }
-        )
+        medicines.append({
+            "medicine_name": medicine_name,
+            "dosage": dosage,
+            "frequency": frequency,
+            "duration": duration,
+            "raw_line": line,
+        })
 
     return medicines
