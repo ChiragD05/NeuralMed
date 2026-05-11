@@ -1,19 +1,19 @@
-Fever is a temporary increase in body temperature, often due to infection.
+Pneumonia is a lung infection that may cause fever, cough, chest pain, and difficulty breathing. Treatment may include antibiotics, rest, hydration, and oxygen support in severe cases.
 
-Common cold symptoms include sneezing, cough, mild fever, and congestion.
+COVID-19 symptoms may include fever, cough, fatigue, sore throat, breathing difficulty, and loss of smell or taste. Severe cases require medical evaluation.
 
-Pneumonia is a lung infection that may cause fever, cough, chest pain, and difficulty breathing.
+Asthma is a chronic respiratory disease causing wheezing, chest tightness, shortness of breath, and coughing. Inhalers are commonly used for treatment.
 
-COVID-19 symptoms may include fever, cough, fatigue, and loss of smell.
+Diabetes is a chronic disease affecting blood sugar regulation. Symptoms may include increased thirst, frequent urination, fatigue, and blurred vision.
 
-Diabetes is a chronic condition affecting blood sugar regulation.
+Hypertension, also known as high blood pressure, increases the risk of heart disease and stroke. Lifestyle modification and medication may be required.
 
-High blood pressure may increase risk of heart disease and stroke.
+Tuberculosis is a bacterial infection that primarily affects the lungs and may cause persistent cough, fever, night sweats, and weight loss.
 
-Chest pain with shortness of breath may require urgent medical evaluation.
+Heart disease may cause chest pain, shortness of breath, dizziness, fatigue, and irregular heartbeat.
 
-Persistent severe headache with vomiting should be medically evaluated.
+Stroke symptoms may include facial drooping, weakness on one side of the body, slurred speech, and confusion. Immediate medical attention is critical.
 
-Tuberculosis is a bacterial lung infection that may cause cough, fever, and weight loss.
+Anemia is a condition involving low red blood cell count and may cause fatigue, weakness, dizziness, and pale skin.
 
-Medical AI systems should not replace licensed healthcare professionals.
+Migraine is a neurological condition that may cause severe headaches, nausea, vomiting, and sensitivity to light or sound.
