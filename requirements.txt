@@ -21,6 +21,7 @@ numpy==2.4.4
 plotly==6.7.0
 pillow==12.2.0
 opencv-python-headless==4.13.0.92
-pytesseract==0.3.13
 
 pymupdf==1.27.2.3
+pypdf==6.11.0
+pytesseract==0.3.13
