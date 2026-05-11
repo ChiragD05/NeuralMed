@@ -1,6 +1,7 @@
 import streamlit as st
+
 from utils.ui import load_css, page_header
-from services.report_summarizer_service import extract_text_from_pdf, simplify_report
+from services.report_ml_service import summarize_medical_report
 from services.db import insert_data
 
 def render():
@@ -8,7 +9,7 @@ def render():
 
     page_header(
         "📄 Medical Report Summarizer",
-        "Upload a PDF or paste report text to get a simplified summary"
+        "Transformer-based report understanding and simplification"
     )
 
     user_name = st.text_input(
@@ -17,57 +18,25 @@ def render():
         key="report_patient_name_input"
     )
 
-    source_type = st.radio(
-        "Choose input type",
-        ["Paste Text", "Upload PDF"],
-        horizontal=True,
-        key="report_source_type"
+    report_text = st.text_area(
+        "Paste Medical Report Text",
+        height=250,
+        placeholder="Paste blood report, discharge summary, lab report, etc.",
+        key="report_text_input"
     )
-
-    report_text = ""
-
-    if source_type == "Paste Text":
-        report_text = st.text_area(
-            "Paste Medical Report Text",
-            height=250,
-            placeholder="Paste blood report, discharge summary, lab report, etc.",
-            key="report_text_input"
-        )
-
-    elif source_type == "Upload PDF":
-        uploaded_pdf = st.file_uploader(
-            "Upload PDF Report",
-            type=["pdf"],
-            key="report_pdf_upload"
-        )
-
-        if uploaded_pdf is not None:
-            with st.spinner("Extracting text from PDF..."):
-                report_text = extract_text_from_pdf(uploaded_pdf)
-
-            st.subheader("Extracted Report Text")
-            st.text_area(
-                "PDF Text",
-                value=report_text,
-                height=250,
-                key="report_pdf_text_output"
-            )
 
     if st.button("Summarize Report", key="summarize_report_button"):
         if not report_text.strip():
-            st.error("Please enter or upload a report first.")
+            st.error("Please paste a report first.")
             return
 
-        with st.spinner("Generating summary..."):
-            result = simplify_report(report_text)
+        with st.spinner("Generating transformer summary..."):
+            result = summarize_medical_report(report_text)
 
-        st.subheader("Simple Summary")
-        st.info(result["summary"] if result["summary"] else "No summary could be generated.")
+        st.subheader("Summary")
+        st.info(result["summary"] if result["summary"] else "No summary generated.")
 
-        st.subheader("Key Medical Terms")
-        st.write(result["key_terms_text"])
-
-        st.subheader("Important Highlights")
+        st.subheader("Highlights")
         if result["highlights"]:
             for item in result["highlights"]:
                 st.markdown(f"- {item}")
