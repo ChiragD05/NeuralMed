@@ -1,108 +1,97 @@
 import streamlit as st
 
 from utils.ui import load_css, page_header
-from services.medical_imaging_service import analyze_medical_image
 from utils.charts import imaging_prediction_chart
+
+from services.medical_imaging_service import (
+    analyze_medical_image
+)
+
 from services.db import insert_data
+
 
 def render():
 
     load_css()
 
     page_header(
-        "🩻 Medical Image Classification",
-        "CNN-powered medical image analysis"
+        "🩻 Medical Imaging AI",
+        "Real CNN-based medical image analysis"
     )
 
-    patient_name = st.text_input(
-        "Patient Name",
-        placeholder="Enter patient name",
-        key="imaging_patient_name"
-    )
-
-    uploaded_file = st.file_uploader(
-        "Upload Medical Image",
-        type=["png", "jpg", "jpeg"],
+    uploaded_image = st.file_uploader(
+        "Upload Chest X-ray",
+        type=["jpg", "jpeg", "png"],
         key="medical_image_upload"
     )
 
-    if uploaded_file is not None:
+    if uploaded_image is not None:
+        try:
+           uploaded_image.seek(0)
+        except Exception:
+            pass
 
         st.image(
-            uploaded_file,
-            caption="Uploaded Medical Image",
+            uploaded_image,
+            caption="Uploaded Image",
             use_container_width=True
         )
 
-        analyze_btn = st.button(
+        if st.button(
             "Analyze Medical Image",
             key="analyze_medical_image_button"
-        )
+        ):
 
-        if analyze_btn:
+            with st.spinner(
+                "Running CNN inference..."
+            ):
 
-            with st.spinner("Running CNN inference..."):
-
-                results = analyze_medical_image(uploaded_file)
-
-            st.subheader("Prediction Result")
-
-            confidence = results["confidence"]
-
-            if confidence > 75:
-                st.error(
-                    f"Primary Prediction: {results['top_prediction']} ({confidence}%)"
+                result = analyze_medical_image(
+                    uploaded_image
                 )
 
-            elif confidence > 50:
-                st.warning(
-                    f"Primary Prediction: {results['top_prediction']} ({confidence}%)"
-                )
+            st.success(
+                "AI analysis complete"
+            )
 
-            else:
-                st.success(
-                    f"Primary Prediction: {results['top_prediction']} ({confidence}%)"
-                )
+            st.subheader(
+                "Prediction"
+            )
 
-            st.info(results["description"])
+            st.metric(
+                "Top Prediction",
+                result["top_prediction"]
+            )
 
-            st.subheader("Prediction Confidence Scores")
+            st.metric(
+                "Confidence",
+                f"{result['confidence']}%"
+            )
+
+            st.info(
+                result["description"]
+            )
+
+            st.subheader(
+                "Prediction Breakdown"
+            )
 
             chart = imaging_prediction_chart(
-                results["all_predictions"]
+                result["all_predictions"]
             )
 
-            st.plotly_chart(
-                chart,
-                use_container_width=True
-            )
-
-            st.subheader("Detailed Probabilities")
-
-            for prediction in results["all_predictions"]:
-
-                st.markdown(
-                    f"""
-                    <div class="metric-card">
-                        <div class="metric-title">
-                            {prediction["class"]}
-                        </div>
-
-                        <div class="metric-value">
-                            {prediction["confidence"]}%
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
+            if chart:
+                st.plotly_chart(
+                    chart,
+                    use_container_width=True
                 )
 
-                st.write("")
-
             payload = {
-                "user_name": patient_name,
-                "file_name": uploaded_file.name,
-                "file_url": "",
-                "prediction": results,
+                "prediction":
+                    result["top_prediction"],
+
+                "confidence":
+                    result["confidence"],
             }
 
             try:
@@ -112,10 +101,6 @@ def render():
                     payload
                 )
 
-                st.success(
-                    "Medical imaging result saved successfully"
-                )
-
             except Exception as e:
 
                 st.warning(
@@ -123,6 +108,6 @@ def render():
                 )
 
     st.caption(
-        "This tool provides AI-assisted decision support only "
-        "and does not replace radiologists or licensed medical professionals."
+        "AI-generated medical imaging analysis "
+        "for educational decision support only."
     )
